@@ -20,7 +20,7 @@ class Dashboard:
         self.max_angle = max_angle
         
         # Calibration State
-        self.calibration_mode = 0 # 0: Off, 1: Color, 2: Input PSI, 3: Min Angle, 4: Max Angle
+        self.calibration_mode = 0 # Represents current step in calibration process
         self.calib_min_psi = 0
         self.calib_max_psi = 100
         self.calib_min_angle = 0
@@ -64,19 +64,18 @@ class Dashboard:
         self.ax_config.axis('off')
         
         # Calibrate Button (Centered in right panel)
-        # Right panel x range is roughly 0.5 to 1.0. Center is 0.75.
-        # Button width is 0.15. Start x = 0.75 - (0.15/2) = 0.675
         self.ax_calib_btn = self.fig.add_axes([0.675, 0.1, 0.15, 0.08])
         self.btn_calib = Button(self.ax_calib_btn, 'Calibrate Gauge')
         self.btn_calib.on_clicked(self.start_calibration)
         
-        # --- Calibration Widgets (Hidden initially) ---
+        # Calibration Widgets (Hidden initially)
         self.calib_widgets = [] # Stores Axes
         self.calib_components = [] # Stores Widgets (Buttons, TextBoxes)
         
         plt.tight_layout()
         plt.show(block=False)
 
+    # Changes color needle algorithm is trying to detect
     def on_color_change(self, label):
         color_map = {'Red': 'red', 'Black': 'black', 'Blue': 'blue'}
         selected_color = color_map.get(label, 'red')
@@ -84,18 +83,21 @@ class Dashboard:
         if self.config_callback:
             self.config_callback(selected_color)
 
+    # Start the calibration process
     def start_calibration(self, event):
         self.calibration_mode = 1
         self.clear_right_panel()
         self.setup_calibration_step1()
 
+    # Clear right panel for calibration steps
     def clear_right_panel(self):
         # Hide normal widgets
         self.ax_graph.set_visible(False)
         self.ax_psi.set_visible(False)
         self.ax_config.set_visible(False)
         self.ax_calib_btn.set_visible(False)
-        
+
+    # Cleanup calibration widgets to prevent conflicts
     def cleanup_calibration_widgets(self):
         # Safely disconnect and remove widgets to prevent event conflicts
         for widget in self.calib_components:
@@ -111,6 +113,7 @@ class Dashboard:
         self.calib_components = []
         self.calib_widgets = []
 
+    # Bring back normal dashboard widgets
     def restore_right_panel(self):
         # Show normal widgets
         self.ax_graph.set_visible(True)
@@ -121,6 +124,7 @@ class Dashboard:
         self.cleanup_calibration_widgets()
         self.calibration_mode = 0
 
+    # Needle Color Selection Step
     def setup_calibration_step1(self):
         # Step 1: Needle Color
         ax_title = self.fig.add_subplot(self.gs[0, 1])
@@ -147,6 +151,7 @@ class Dashboard:
         self.calibration_mode = 2
         self.setup_calibration_step2()
 
+    # PSI Range Input Step
     def setup_calibration_step2(self):
         # Step 2: Input PSI Range
         ax_title = self.fig.add_subplot(self.gs[0, 1])
@@ -185,6 +190,7 @@ class Dashboard:
         except ValueError:
             print("Invalid PSI input")
 
+    # Capture Min Angle Step
     def setup_calibration_step3(self):
         # Step 3: Capture Min Angle
         ax_instr = self.fig.add_subplot(self.gs[0, 1])
@@ -211,6 +217,7 @@ class Dashboard:
         self.calibration_mode = 4
         self.setup_calibration_step4()
 
+    # Capture Max Angle Step
     def setup_calibration_step4(self):
         # Step 4: Capture Max Angle
         ax_instr = self.fig.add_subplot(self.gs[0, 1])
@@ -237,10 +244,9 @@ class Dashboard:
             
         self.restore_right_panel()
 
+    # Update dashboard with new frame and PSI value
     def update(self, processed_frame, psi_value, raw_angle=None):
-        """
-        Updates the dashboard with new data.
-        """
+        
         self.current_raw_angle = raw_angle if raw_angle is not None else 0
         
         # Update Webcam
@@ -250,14 +256,14 @@ class Dashboard:
             # Expanded radius to match typical gauge detection size (approx 45% of height)
             r = int(h * 0.45)
             
-            # --- Static Overlays (Always Visible) ---
+            # Static Overlays over webcam feed for gauge alignment
             # 1. Green Guide Circle
             cv2.circle(processed_frame, (cx, cy), r, (0, 255, 0), 2)
             cv2.putText(processed_frame, "ALIGN GAUGE", (cx-60, cy-r-10), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
             
             # 2. Blue Ticker Lines (Based on current calibration)
-            # Draw short ticks (15% of radius)
+            # Draw short ticks for min and max angles
             tick_len = int(r * 0.15)
             
             # Min Angle Ticker

@@ -20,16 +20,15 @@ class GaugeReader:
     def read_frame(self, frame):
         """
         Process a single frame (from video or image).
-        Returns: 
-            psi_val (float): The calculated value.
-            output_img (image): The frame with overlays drawn.
+        Returns the calculated PSI value and the processed frame with overlays.
         """
+
         # 1. Pre-processing
         height, width = frame.shape[:2]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (9, 9), 2)
         
-        # Dynamic Resolution Logic
+        # Dynamic Resolution Logic (Normalization)
         min_dist = int(width * 0.25)
         min_radius = int(width * 0.05) # Reduced from 0.15 to 0.05 to detect smaller gauges
         
@@ -84,10 +83,12 @@ class GaugeReader:
 
         return psi_val, output_img, raw_angle
 
+    # Find the needle line in the frame
     def _find_needle_line(self, frame, cx, cy, r):
-        # 1. Masking (Keep this! It ensures we don't detect the user's hand)
+
+        # Masking to isolate gauge area
         mask = np.zeros(frame.shape[:2], dtype="uint8")
-        # Increased mask radius to 1.0 to include the full gauge face
+
         cv2.circle(mask, (cx, cy), int(r * 1.0), 255, -1) 
         roi = cv2.bitwise_and(frame, frame, mask=mask)
         
@@ -105,7 +106,7 @@ class GaugeReader:
         elif self.needle_color == 'blue':
             # Color Thresholding for BLUE NEEDLE
             hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-            # Blue is roughly 100-140 in HSV
+            
             lower_blue = np.array([100, 150, 50])
             upper_blue = np.array([140, 255, 255])
             needle_mask = cv2.inRange(hsv, lower_blue, upper_blue)
@@ -127,7 +128,7 @@ class GaugeReader:
             # Combine them
             needle_mask = cv2.bitwise_or(mask1, mask2)
         
-        # 3. Line Detection (Same as before, but maybe stricter)
+        # 3. Line Detection 
         lines = cv2.HoughLinesP(
             needle_mask, rho=1, theta=np.pi / 180, threshold=15, 
             minLineLength=int(r * 0.10), maxLineGap=int(r * 0.10)
@@ -135,36 +136,32 @@ class GaugeReader:
         
         if lines is None: return None
         
-       # 4. Filter for "Best Reach" (Fix for Large Center Hubs)
+       # 4. Filter for "Best Reach" 
         best_line = None
         max_reach = 0 # We want the line that reaches closest to the edge (radius)
         
         for line in lines:
             x1, y1, x2, y2 = line[0]
             
-            # --- A. CENTER ALIGNMENT CHECK ---
-            # (Keep this! It ensures the line points at the center)
+            # Calculate distance from center to line
             num = abs((y2 - y1) * cx - (x2 - x1) * cy + x2 * y1 - y2 * x1)
             den = np.sqrt((y2 - y1)**2 + (x2 - x1)**2)
             if den == 0 or (num / den) > 15: 
                 continue 
-            
-            # --- B. TIP DISTANCE CHECK (The Fix) ---
+        
             # Calculate how far each endpoint is from the center hub
             dist1 = np.sqrt((x1 - cx)**2 + (y1 - cy)**2)
             dist2 = np.sqrt((x2 - cx)**2 + (y2 - cy)**2)
             
-            # Which end is furthest out?
+            # Finds which end is furthest out
             current_tip_dist = max(dist1, dist2)
             
-            # Filter out "Floating Trash": 
             # If the CLOSEST point is too far from center (>30% radius), 
             # it's probably floating text, not the needle.
             closest_dist = min(dist1, dist2)
             if closest_dist > (r * 0.30):
                 continue
 
-            # --- C. WINNER SELECTION ---
             # Pick the line that extends furthest towards the edge
             if current_tip_dist > max_reach:
                 max_reach = current_tip_dist

@@ -7,7 +7,7 @@ from data_manager import ConfigManager, DataLogger
 from camera import ThreadedCamera
 
 def run_live_demo():
-    # --- 1. Configuration Management ---
+    # Load Configuration on startup
     config_manager = ConfigManager()
     config = config_manager.load_config()
     
@@ -26,7 +26,7 @@ def run_live_demo():
     else:
         print("No configuration found. Please calibrate the gauge.")
 
-    # --- 2. Initialize Reader & Logger ---
+    # Initialize Gauge Reader (OpenCV Processing)
     reader = GaugeReader(
         current_config['min_angle'], 
         current_config['max_angle'], 
@@ -36,8 +36,6 @@ def run_live_demo():
     )
     
     logger = DataLogger()
-
-    # --- 3. Define Callbacks ---
     
     def save_current_config():
         # Helper to save current state of reader
@@ -50,11 +48,13 @@ def run_live_demo():
         }
         config_manager.save_config(cfg)
 
+    # Update Needle Color
     def on_config_change(new_color):
         print(f"Main: Updating needle color to {new_color}")
         reader.needle_color = new_color
         save_current_config()
 
+    # Update config with new calibration values
     def on_calibration_complete(min_angle, max_angle, min_psi, max_psi):
         print(f"Main: Calibration Updated!")
         print(f"  Min Angle: {min_angle:.1f}, Max Angle: {max_angle:.1f}")
@@ -78,8 +78,8 @@ def run_live_demo():
         reader.min_angle = min_angle
         dashboard.min_angle = min_angle
 
-    # --- 4. Setup Webcam & Dashboard ---
-    # Initialize Threaded Camera
+    # Setup Webcam Feed and Dashboard
+
     video_stream = ThreadedCamera(0).start()
     
     dashboard = Dashboard(
@@ -92,7 +92,7 @@ def run_live_demo():
 
     print("Starting Live Feed... Close the dashboard window to quit.")
 
-    # --- 5. Main Loop ---
+    # Running Loop until program is closed or exited
     while True:
         ret, frame = video_stream.read()
         if not ret:
@@ -114,9 +114,15 @@ def run_live_demo():
             break
 
     video_stream.stop()
-    # cv2.destroyAllWindows() # No longer needed as we don't use cv2.imshow
+    
 
 if __name__ == "__main__":
     # If you don't have a webcam right now, you can still test on an image:
     # Just load an image and pass it to reader.read_frame() like before!
+    
+    # Example: 
+    # img = cv2.imread('test_gauge.jpg')
+    # psi, processed_img, angle = reader.read_frame(img)
+    # print(f"Detected PSI: {psi}, Angle: {angle}")
+
     run_live_demo()

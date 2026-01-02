@@ -1,7 +1,8 @@
 import numpy as np
 
+# Calculate the angle of the needle relative to the center of the gauge
 def calculate_angle(line, center_x, center_y):
-    # (Your existing calculate_angle code is perfect, keep it as is!)
+
     if line is None:
         return None
 
@@ -25,31 +26,28 @@ def calculate_angle(line, center_x, center_y):
         
     return angle_deg
 
+# Calculate PSI based on needle angle and calibration
 def calculate_psi(current_angle, start_angle, end_angle, min_val, max_val):
     """
-    Calculates PSI by measuring how far the needle has traveled CLOCKWISE 
-    from the start_angle.
     
-    Args:
-        current_angle: The needle's current angle (0-360).
-        start_angle: The angle of the '0 PSI' mark (e.g., ~225 deg).
-        end_angle: The angle of the '100 PSI' mark (e.g., ~315 deg).
-        min_val: The value at start (0).
-        max_val: The value at end (100).
+    Meaning of variables:
+        current_angle - The needle's current angle (0-360).
+        start_angle - The angle of the '0 PSI' mark (e.g., ~225 deg).
+        end_angle - The angle of the '100 PSI' mark (e.g., ~315 deg).
+        min_val - The value at start (0).
+        max_val - The value at end (100).
     """
-    # 1. Calculate the total "arc" of the gauge (Clockwise)
-    # How many degrees is it from Start to End?
+    # 1. Calculate the total "arc" of the gauge
     diff_total = start_angle - end_angle
     if diff_total < 0:
         diff_total += 360
         
-    # 2. Calculate how far the needle has traveled (Clockwise)
-    # How many degrees is it from Start to Current?
+    # 2. Calculate how far the needle has traveled
     diff_current = start_angle - current_angle
     if diff_current < 0:
         diff_current += 360
         
-    # --- Deadzone / Clamping Logic ---
+    # Deadzone logic
     # If diff_current is larger than the total range, it means we are in the "dead zone"
     if diff_current > diff_total:
         dead_zone = 360 - diff_total
