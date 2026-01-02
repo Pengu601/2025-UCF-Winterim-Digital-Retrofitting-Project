@@ -49,6 +49,19 @@ def calculate_psi(current_angle, start_angle, end_angle, min_val, max_val):
     if diff_current < 0:
         diff_current += 360
         
+    # --- Deadzone / Clamping Logic ---
+    # If diff_current is larger than the total range, it means we are in the "dead zone"
+    if diff_current > diff_total:
+        dead_zone = 360 - diff_total
+        dist_from_max = diff_current - diff_total
+        
+        # If closer to Max (just passed 100%), clamp to Max
+        if dist_from_max < (dead_zone / 2):
+            return max_val
+        # If closer to Min (just before 0%), clamp to Min
+        else:
+            return min_val
+
     # 3. Calculate Percentage
     percentage = diff_current / diff_total
     

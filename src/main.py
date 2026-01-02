@@ -1,47 +1,120 @@
 import cv2
 import os
+import matplotlib.pyplot as plt
 from gauge import GaugeReader
-from dashboard import TelemetryGraph
-# --- CONFIGURATION ---
-# Use the values you just successfully calibrated!
-CALIB_MIN_ANGLE = 190.6
-CALIB_MAX_ANGLE = 310.6
-MIN_PSI = 0
-MAX_PSI = 100
+from dashboard import Dashboard
+from data_manager import ConfigManager, DataLogger
+from camera import ThreadedCamera
 
 def run_live_demo():
-    # 1. Initialize the Reader Object
-    reader = GaugeReader(CALIB_MIN_ANGLE, CALIB_MAX_ANGLE, MIN_PSI, MAX_PSI)
+    # --- 1. Configuration Management ---
+    config_manager = ConfigManager()
+    config = config_manager.load_config()
     
-    # 2. Setup Webcam (0 is usually the default camera)
-    cap = cv2.VideoCapture(0)
+    # Default values if no config exists
+    current_config = {
+        'min_angle': 0,
+        'max_angle': 0,
+        'min_psi': 0,
+        'max_psi': 100,
+        'needle_color': 'red'
+    }
     
-    graph = TelemetryGraph()
-    # Optional: Set resolution for better performance
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    if config:
+        print("Loaded configuration from file.")
+        current_config.update(config)
+    else:
+        print("No configuration found. Please calibrate the gauge.")
 
-    print("Starting Live Feed... Press 'q' to quit.")
+    # --- 2. Initialize Reader & Logger ---
+    reader = GaugeReader(
+        current_config['min_angle'], 
+        current_config['max_angle'], 
+        current_config['min_psi'], 
+        current_config['max_psi'], 
+        needle_color=current_config['needle_color']
+    )
+    
+    logger = DataLogger()
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    # --- 3. Define Callbacks ---
+    
+    def save_current_config():
+        # Helper to save current state of reader
+        cfg = {
+            'min_angle': reader.min_angle,
+            'max_angle': reader.max_angle,
+            'min_psi': reader.min_val,
+            'max_psi': reader.max_val,
+            'needle_color': reader.needle_color
+        }
+        config_manager.save_config(cfg)
 
-        # 3. Ask the Reader to process this frame
-        psi, processed_frame = reader.read_frame(frame)
+    def on_config_change(new_color):
+        print(f"Main: Updating needle color to {new_color}")
+        reader.needle_color = new_color
+        save_current_config()
+
+    def on_calibration_complete(min_angle, max_angle, min_psi, max_psi):
+        print(f"Main: Calibration Updated!")
+        print(f"  Min Angle: {min_angle:.1f}, Max Angle: {max_angle:.1f}")
+        print(f"  Min PSI: {min_psi}, Max PSI: {max_psi}")
         
-        if psi is not None:
-            print(f"Current Reading: {psi} PSI")
-            graph.update(psi)
-        # 4. Show the result
-        cv2.imshow("Optical Telemetry Bridge", processed_frame)
+        # Update Reader
+        reader.min_angle = min_angle
+        reader.max_angle = max_angle
+        reader.min_val = min_psi
+        reader.max_val = max_psi
+        
+        # Update Dashboard Static Lines
+        dashboard.min_angle = min_angle
+        dashboard.max_angle = max_angle
+        
+        # Save to JSON
+        save_current_config()
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+    def on_min_angle_update(min_angle):
+        print(f"Main: Updating Min Angle to {min_angle:.1f}")
+        reader.min_angle = min_angle
+        dashboard.min_angle = min_angle
+
+    # --- 4. Setup Webcam & Dashboard ---
+    # Initialize Threaded Camera
+    video_stream = ThreadedCamera(0).start()
+    
+    dashboard = Dashboard(
+        config_callback=on_config_change, 
+        calibration_callback=on_calibration_complete, 
+        min_angle_callback=on_min_angle_update,
+        min_angle=current_config['min_angle'],
+        max_angle=current_config['max_angle']
+    )
+
+    print("Starting Live Feed... Close the dashboard window to quit.")
+
+    # --- 5. Main Loop ---
+    while True:
+        ret, frame = video_stream.read()
+        if not ret:
+            # If no frame is ready yet or camera disconnected
+            continue
+
+        # Process frame
+        psi, processed_frame, raw_angle = reader.read_frame(frame)
+        
+        # Log Data
+        if psi is not None:
+            logger.log(psi)
+        
+        # Update Dashboard
+        dashboard.update(processed_frame, psi, raw_angle)
+        
+        # Check if dashboard window is closed
+        if not plt.fignum_exists(dashboard.fig.number):
             break
 
-    cap.release()
-    cv2.destroyAllWindows()
+    video_stream.stop()
+    # cv2.destroyAllWindows() # No longer needed as we don't use cv2.imshow
 
 if __name__ == "__main__":
     # If you don't have a webcam right now, you can still test on an image:
