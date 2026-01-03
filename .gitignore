@@ -1,1 +1,3 @@
 venv/
+src/config.json
+src/telemtry_log.csv
