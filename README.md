@@ -55,11 +55,9 @@ Follow the on screen steps to properly calibrate your specific gauge to work wit
 #### telemetry_log.csv: 
 This file is generated automatically in the project folder. It contains a full log of your session:
 
-Timestamp: 
-Seconds elapsed since start.
+    Timestamp: Seconds elapsed since start.
 
-PSI: 
-The pressure reading at that moment.
+    PSI: The pressure reading at that moment.
 
 #### config.json: 
 Stores your saved calibration profile. Delete this file if you need to re-calibrate for a new gauge.
